@@ -1,13 +1,14 @@
 """"
 Copyright © Krypton 2021 - https://github.com/kkrypt0nn
+Copyright © Rainb0wCodes 2021 - https://github.com/Rainb0wCodes
 Description:
-This is a template to create your own discord bot in python.
+This is my personal Discord bot, Rainb0t
 
-Version: 2.3
+Version: 0.1.0
 """
 
-import discord, asyncio, os, platform, sys
-from discord.ext.commands import Bot
+import discord, asyncio, os, platform, sys, json
+from discord.ext.commands import Bot, when_mentioned_or, has_permissions, Context, MissingPermissions, BotMissingPermissions, BucketType, CommandOnCooldown, CommandNotFound
 from discord.ext import commands
 if not os.path.isfile("config.py"):
 	sys.exit("'config.py' not found! Please add it and try again.")
@@ -46,6 +47,39 @@ intents.members = True
 
 intents = discord.Intents.default()
 
+"""Gets the assigned bot prefix for a guild."""
+def get_prefix(guild: discord.Guild):
+    if not str(guild.id) in prefixes:
+        return ';'
+
+    return prefixes[str(guild.id)]
+
+"""Gets the prefixes for a message"""
+def get_prefixes(bot: Bot, message: discord.Message):
+	if message.guild:
+		return when_mentioned_or(get_prefix(message.guild))(bot, message)
+	else:
+		return when_mentioned_or(';')(bot, message)
+
+def snake_case_to_title_case(string):
+    chars = list(string.replace('_', ' '))
+    for i, char in enumerate(chars):
+        if i == 0 or chars[i - 1] == ' ':
+            chars[i] = chars[i].upper()
+
+    return ''.join(chars)
+
+def load_data():
+    global prefixes
+
+    try:
+        with open('./prefixes.json', 'r') as fd:
+            prefixes = json.load(fd)
+            print(f"Loaded prefixes for {len(prefixes)} servers!")
+    except IOError:
+        with open('./prefixes.json', 'w') as fd:
+            json.dump({}, fd)
+
 bot = Bot(command_prefix=config.BOT_PREFIX, intents=intents)
 
 # The code in this even is executed when the bot is ready
@@ -61,13 +95,13 @@ async def on_ready():
 # Setup the game status task of the bot
 async def status_task():
 	while True:
-		await bot.change_presence(activity=discord.Game("with you!"))
+		await bot.change_presence(activity=discord.Activity(name="you", type=discord.ActivityType.watching))
 		await asyncio.sleep(60)
-		await bot.change_presence(activity=discord.Game("with Krypton!"))
+		await bot.change_presence(activity=discord.Activity(name="over Discord", type=discord.ActivityType.watching))
 		await asyncio.sleep(60)
 		await bot.change_presence(activity=discord.Game(f"{config.BOT_PREFIX} help"))
 		await asyncio.sleep(60)
-		await bot.change_presence(activity=discord.Game("with humans!"))
+		await bot.change_presence(activity=discord.Activity(name="all of us", type=discord.ActivityType.watching))
 		await asyncio.sleep(60)
 
 # Removes the default help command of discord.py to be able to create our custom help command.
@@ -84,9 +118,22 @@ if __name__ == "__main__":
 			extension = extension.replace("cogs.", "")
 			print(f"Failed to load extension {extension}\n{exception}")
 
+@bot.command()
+@has_permissions(manage_guild=True)
+async def prefix(ctx: Context, *, new_prefix: str):
+    prefixes[str(ctx.guild.id)] = new_prefix
+
+    embed = discord.Embed(
+        title="Prefix set", description=f"Prefix set to {new_prefix}", color=config.EMBED_COLOR)
+
+    await ctx.send(embed=embed)
+
+    with open('./prefixes.json', 'w') as fd:
+        json.dump(prefixes, fd)
+
 # The code in this event is executed every time someone sends a message, with or without the prefix
 @bot.event
-async def on_message(message):
+async def on_message(message: discord.Message):
 	# Ignores if a command is being executed by a bot or by the bot itself
 	if message.author == bot.user or message.author.bot:
 		return
@@ -104,25 +151,54 @@ async def on_message(message):
 			)
 			await context.send(embed=embed)
 
-# The code in this event is executed every time a command has been *successfully* executed
 @bot.event
-async def on_command_completion(ctx):
-	fullCommandName = ctx.command.qualified_name
-	split = fullCommandName.split(" ")
-	executedCommand = str(split[0])
-	print(f"Executed {executedCommand} command in {ctx.guild.name} by {ctx.message.author} (ID: {ctx.message.author.id})")
+async def on_command_error(ctx: Context, error: Exception):
+    if isinstance(error, MissingPermissions):
+        missing_perms = error.missing_perms
+        missing_perms = map(lambda permission: snake_case_to_title_case(
+            permission.replace("guild", "server")), missing_perms)
+        missing_perms = list(missing_perms)
 
-# The code in this event is executed every time a valid commands catches an error
-@bot.event
-async def on_command_error(context, error):
-	if isinstance(error, commands.CommandOnCooldown):
-		embed = discord.Embed(
-			title="Error!",
-			description="This command is on a %.2fs cooldown" % error.retry_after,
-			color=0xFF0000
-		)
-		await context.send(embed=embed)
-	raise error
+        embed = discord.Embed(title="Missing Permissions", color=0xde1b1b, description="<:xmark:823005434629586974> Error! You are missing the " +
+                              (f"{', '.join(missing_perms[:-1])} and {missing_perms[-1]}" if len(missing_perms) > 1 else missing_perms[0]) +
+                              f" permission{'s' if len(missing_perms) > 1 else ''}!")
+        await ctx.send(embed=embed)
+        return
+
+    if isinstance(error, BotMissingPermissions):
+        missing_perms = error.missing_perms
+        missing_perms = list(map(lambda permission: snake_case_to_title_case(
+            permission.replace("guild", "server")), missing_perms))
+
+        embed = discord.Embed(title="Missing Permissions", color=0xde1b1b, description="<:xmark:823005434629586974> Error! I need the " +
+                              (f"{', '.join(missing_perms[:-1])} and {missing_perms[-1]}" if len(missing_perms) > 1 else missing_perms[0]) +
+                              f" permission{'s' if len(missing_perms) > 1 else ''} to run this command.")
+        await ctx.send(embed=embed)
+        return
+
+    if isinstance(error, CommandOnCooldown):
+        embed = discord.Embed(
+            title="Cooldown!", color=0xde1b1b,
+            description=f"<:xmark:823005434629586974> Error! You are on cooldown." +
+            f"You can use the `{ctx.command}` command again in {format_seconds(error.retry_after)}."
+        )
+        await ctx.send(embed=embed)
+        return
+
+    if isinstance(error, CommandNotFound):
+        embed = discord.Embed(
+            title="Command doesn't exist!", color=0xde1b1b,
+            description=f"<:xmark:823005434629586974> Error! That command doesn't exist!"
+        )
+        await ctx.send(embed=embed)
+        return
+
+    embed = discord.Embed(title="<:xmark:823005434629586974> Unknown error", color=0xde1b1b,
+                          description='```py\n' + repr(error) + '\n```')
+    await ctx.send(embed=embed)
+
+prefixes = {}
+load_data()
 
 # Run the bot with the token
 bot.run(config.TOKEN)

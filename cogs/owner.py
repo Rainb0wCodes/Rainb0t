@@ -17,7 +17,7 @@ class owner(commands.Cog, name="owner"):
         if context.message.author.id in config.OWNERS:
             embed = discord.Embed(
                 description="Shutting down. Bye! :wave:",
-                color=0x00FF00
+                color=config.EMBED_COLOR
             )
             await context.send(embed=embed)
             await self.bot.logout()
@@ -53,7 +53,7 @@ class owner(commands.Cog, name="owner"):
         if context.message.author.id in config.OWNERS:
             embed = discord.Embed(
                 description=args,
-                color=0x00FF00
+                color=config.EMBED_COLOR
             )
             await context.send(embed=embed)
         else:
@@ -89,7 +89,7 @@ class owner(commands.Cog, name="owner"):
                 embed = discord.Embed(
                     title="User Blacklisted",
                     description=f"**{member.name}** has been successfully added to the blacklist",
-                    color=0x00FF00
+                    color=config.EMBED_COLOR
                 )
                 embed.set_footer(
                     text=f"There are now {len(config.BLACKLIST)} users in the blacklist"
@@ -122,7 +122,7 @@ class owner(commands.Cog, name="owner"):
                 embed = discord.Embed(
                     title="User Unblacklisted",
                     description=f"**{member.name}** has been successfully removed from the blacklist",
-                    color=0x00FF00
+                    color=config.EMBED_COLOR
                 )
                 embed.set_footer(
                     text=f"There are now {len(config.BLACKLIST)} users in the blacklist"
