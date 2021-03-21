@@ -8,3 +8,4 @@ BLACKLIST = []
 STARTUP_COGS = [
     "cogs.general", "cogs.help", "cogs.moderation", "cogs.owner",
 ]
+EMBED_COLOR = 0x1e90ff
